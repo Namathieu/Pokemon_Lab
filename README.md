@@ -1,5 +1,6 @@
 ﻿# PokeDeck Architect
 (This app was made with AI since I'm no Dev! So I'm pretty sure it's well optimised!)
+
 PokeDeck Architect is a desktop-first Electron app for building Pokemon TCG Standard decks. The renderer runs on Vite + React, while a separate CLI task keeps a local dump of every Standard-legal card so you can browse, filter, and drag them into decks offline.
 
 ## Features
