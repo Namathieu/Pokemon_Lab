@@ -1,91 +1,64 @@
-# electron-vite-react
+﻿# PokeDeck Architect
 
-[![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite)
-![GitHub stars](https://img.shields.io/github/stars/caoxiemeihao/vite-react-electron?color=fa6470)
-![GitHub issues](https://img.shields.io/github/issues/caoxiemeihao/vite-react-electron?color=d8b22d)
-![GitHub license](https://img.shields.io/github/license/caoxiemeihao/vite-react-electron)
-[![Required Node.JS >= 14.18.0 || >=16.0.0](https://img.shields.io/static/v1?label=node&message=14.18.0%20||%20%3E=16.0.0&logo=node.js&color=3f893e)](https://nodejs.org/about/releases)
+PokeDeck Architect is a desktop-first Electron app for building Pokemon TCG Standard decks. The renderer runs on Vite + React, while a separate CLI task keeps a local dump of every Standard-legal card so you can browse, filter, and drag them into decks offline.
 
-English | [简体中文](README.zh-CN.md)
+## Features
 
-## 👀 Overview
+- **Offline card library** - `npm run sync:cards` ingests the `pokemon-tcg-data` dump included in this repo and emits `public/data/standard-cards.json` with *every* English card.
+- **Modern deck builder** - drag cards into your list, rename decks inline, and see live validation for 60-card count plus the four-copy rule.
+- **Import / export** - paste Pokemon TCG Online text lists and export in the same format.
+- **Persistent state** - decks are stored with `zustand` so reloads will not wipe your work.
+- **Responsive UI** - filter panel, card grid, and deck rail adapt from laptop widths through ultrawide monitors.
 
-📦 Ready out of the box  
-🎯 Based on the official [template-react-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts), project structure will be familiar to you  
-🌱 Easily extendable and customizable  
-💪 Supports Node.js API in the renderer process  
-🔩 Supports C/C++ native addons  
-🐞 Debugger configuration included  
-🖥 Easy to implement multiple windows  
+## Prerequisites
 
-## 🛫 Quick Setup
+- Node.js 18+
+- A copy of [`pokemon-tcg-data`](https://github.com/PokemonTCG/pokemon-tcg-data) checked out into `pokemon-tcg-data-master/` at the project root (this repo already includes the folder—update it when you need the latest sets).
 
-```sh
-# clone the project
-git clone https://github.com/electron-vite/electron-vite-react.git
+## Development Workflow
 
-# enter the project directory
-cd electron-vite-react
-
-# install dependency
+```bash
 npm install
-
-# develop
-npm run dev
+npm run sync:cards   # build the card bundle from pokemon-tcg-data
+npm run dev          # launch Electron + Vite with HMR
 ```
 
-## 🐞 Debug
+- The sync script walks `pokemon-tcg-data-master/cards/en/*.json`, enriches entries with `sets/en.json`, and writes `public/data/standard-cards.json`. Filtering happens inside the UI.
+- When the upstream dataset changes (new sets, rotation, etc.), pull the latest files, rerun `npm run sync:cards`, then click "Reload local bundle" in the filter panel.
 
-![electron-vite-react-debug.gif](/electron-vite-react-debug.gif)
+## Production Build
 
-## 📂 Directory structure
-
-Familiar React application structure, just with `electron` folder on the top :wink:  
-*Files in this folder will be separated from your React application and built into `dist-electron`*  
-
-```tree
-├── electron                                 Electron-related code
-│   ├── main                                 Main-process source code
-│   └── preload                              Preload-scripts source code
-│
-├── release                                  Generated after production build, contains executables
-│   └── {version}
-│       ├── {os}-{os_arch}                   Contains unpacked application executable
-│       └── {app_name}_{version}.{ext}       Installer for the application
-│
-├── public                                   Static assets
-└── src                                      Renderer source code, your React application
+```bash
+npm run build
+npm run preview
 ```
 
-<!--
-## 🚨 Be aware
+Packaged artifacts land in `release/` according to `electron-builder.json` targets.
 
-This template integrates Node.js API to the renderer process by default. If you want to follow **Electron Security Concerns** you might want to disable this feature. You will have to expose needed API by yourself.  
+## Project Structure
 
-To get started, remove the option as shown below. This will [modify the Vite configuration and disable this feature](https://github.com/electron-vite/vite-plugin-electron-renderer#config-presets-opinionated).
-
-```diff
-# vite.config.ts
-
-export default {
-  plugins: [
-    ...
--   // Use Node.js API in the Renderer-process
--   renderer({
--     nodeIntegration: true,
--   }),
-    ...
-  ],
-}
 ```
--->
+project-root/
+  electron/
+  public/
+    data/            # generated standard-cards.json lives here
+  pokemon-tcg-data-master/
+  scripts/
+  src/
+    components/
+    hooks/
+    services/
+    state/
+    types/
+    utils/
+  test/
+```
 
-## 🔧 Additional features
+## Notes & Next Steps
 
-1. electron-updater 👉 [see docs](src/components/update/README.md)
-1. playwright
+- The importer now resolves cards strictly from your local Standard bundle. If sync data is stale, rerun `npm run sync:cards` before importing lists.
+- `npm run test` builds the app and executes the Playwright suite headlessly; expect an Electron window to flash briefly while tests run.
+- Standard legality is enforced via regulation marks (G, H, I). The UI lets you toggle Standard-only mode or pick any combination of regulation letters so you can browse the full archive.
+- Want to add rarity filters, Expanded cards, or pricing? Extend the sync script to pull the extra fields you need and point the UI filters at them.
 
-## ❔ FAQ
-
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+Happy brewing!

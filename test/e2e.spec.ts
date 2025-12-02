@@ -44,21 +44,27 @@ if (process.platform === 'linux') {
 
   describe('[electron-vite-react] e2e tests', async () => {
     test('startup', async () => {
-      const title = await page.title()
-      expect(title).eq('Electron + Vite + React')
+      const heading = (await page.textContent('h1'))?.trim()
+      expect(heading).eq('Standard Deck Architect')
     })
 
-    test('should be home page is load correctly', async () => {
-      const h1 = await page.$('h1')
-      const title = await h1?.textContent()
-      expect(title).eq('Electron + Vite + React')
+    test('allows renaming the deck inline', async () => {
+      const deckInput = page.locator('section:has-text("Your Deck") input').first()
+      await deckInput.fill('Codex E2E Deck')
+      const value = await deckInput.inputValue()
+      expect(value).eq('Codex E2E Deck')
     })
 
-    test('should be count button can click', async () => {
-      const countButton = await page.$('button')
-      await countButton?.click()
-      const countValue = await countButton?.textContent()
-      expect(countValue).eq('count is 1')
+    test('reset button clears card name filter', async () => {
+      const searchInput = page.locator('label:has-text("Card Name") input').first()
+      await searchInput.fill('pikachu')
+      expect(await searchInput.inputValue()).eq('pikachu')
+
+      const resetButton = page.locator('button:has-text("Reset")').first()
+      await resetButton.click()
+
+      const clearedValue = await searchInput.inputValue()
+      expect(clearedValue).eq('')
     })
   })
 }

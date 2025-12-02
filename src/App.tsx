@@ -1,36 +1,195 @@
-import { useState } from 'react'
-import UpdateElectron from '@/components/update'
-import logoVite from './assets/logo-vite.svg'
-import logoElectron from './assets/logo-electron.svg'
-import './App.css'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
+import { FilterPanel } from '@/components/FilterPanel'
+import { CardGrid } from '@/components/CardGrid'
+import { DeckPanel, DECK_DROPPABLE_ID } from '@/components/DeckPanel'
+import { CardDetailModal } from '@/components/CardDetailModal'
+import type { CardLibraryPayload, CardSearchFilters, PokemonCard } from '@/types/pokemon'
+import { useDeckStore } from '@/state/useDeckStore'
+import { useLocalCardSearch, LOCAL_PAGE_SIZE } from '@/hooks/useLocalCardSearch'
+
+const DEFAULT_FILTERS: CardSearchFilters = {
+  search: '',
+  supertype: 'Pokémon',
+  types: [],
+  setId: '',
+  standardOnly: true,
+  regulationMarks: [],
+  stages: [],
+  sort: 'name-asc',
+}
+
+function DragPreview({ card }: { card: PokemonCard }) {
+  return (
+    <div className='rounded-2xl border border-emerald-400/70 bg-slate-900/80 p-3 shadow-2xl shadow-emerald-500/30'>
+      <img src={card.images.small} alt={card.name} className='h-44 w-auto rounded-xl border border-white/10' />
+      <p className='mt-2 text-center text-sm font-semibold text-white'>{card.name}</p>
+    </div>
+  )
+}
+
+async function fetchLocalLibrary(): Promise<CardLibraryPayload> {
+  const response = await fetch(`/data/standard-cards.json?cache-bust=${Date.now()}`)
+  if (!response.ok) {
+    throw new Error('Local card bundle not found. Run "npm run sync:cards" to generate it.')
+  }
+  return response.json() as Promise<CardLibraryPayload>
+}
 
 function App() {
-  const [count, setCount] = useState(0)
-  return (
-    <div className='App'>
-      <div className='logo-box'>
-        <a href='https://github.com/electron-vite/electron-vite-react' target='_blank'>
-          <img src={logoVite} className='logo vite' alt='Electron + Vite logo' />
-          <img src={logoElectron} className='logo electron' alt='Electron + Vite logo' />
-        </a>
-      </div>
-      <h1>Electron + Vite + React</h1>
-      <div className='card'>
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className='read-the-docs'>
-        Click on the Electron + Vite logo to learn more
-      </p>
-      <div className='flex-center'>
-        Place static files into the<code>/public</code> folder <img style={{ width: '5em' }} src='./node.svg' alt='Node logo' />
-      </div>
+  const [filters, setFilters] = useState<CardSearchFilters>(DEFAULT_FILTERS)
+  const [page, setPage] = useState(1)
+  const [activeCard, setActiveCard] = useState<PokemonCard | null>(null)
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
+  const [previewCard, setPreviewCard] = useState<PokemonCard | null>(null)
 
-      <UpdateElectron />
+  const addCard = useDeckStore((state) => state.addCard)
+  const deckCards = useDeckStore((state) => state.cards)
+
+  const {
+    data: library,
+    isLoading: libraryLoading,
+    isFetching: libraryFetching,
+    refetch: reloadLibrary,
+    error: libraryError,
+  } = useQuery({
+    queryKey: ['card-library'],
+    queryFn: fetchLocalLibrary,
+    staleTime: Infinity,
+    retry: false,
+  })
+
+  const deckCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    Object.values(deckCards).forEach((entry) => {
+      map[entry.card.id] = entry.count
+    })
+    return map
+  }, [deckCards])
+
+  const libraryCards = library?.cards ?? []
+  const localSearch = useLocalCardSearch(filters, page, libraryCards, libraryCards.length > 0)
+  const availableSets = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    libraryCards.forEach((card) => {
+      if (card.set?.id && card.set?.name && !map.has(card.set.id)) {
+        map.set(card.set.id, { id: card.set.id, name: card.set.name })
+      }
+    })
+    return Array.from(map.values())
+  }, [libraryCards])
+
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>()
+    libraryCards.forEach((card) => {
+      card.types?.forEach((type) => set.add(type))
+    })
+    return Array.from(set).sort()
+  }, [libraryCards])
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const card = event.active.data.current as PokemonCard | undefined
+    if (card) {
+      setActiveCard(card)
+      setDraggingCardId(card.id)
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const card = event.active?.data.current as PokemonCard | undefined
+    if (card && event.over?.id === DECK_DROPPABLE_ID) {
+      addCard(card)
+    }
+    setActiveCard(null)
+    setDraggingCardId(null)
+  }
+
+  const resetFilters = () => {
+    setFilters(DEFAULT_FILTERS)
+    setPage(1)
+  }
+
+  const handleFiltersChange = (next: CardSearchFilters) => {
+    setFilters(next)
+    setPage(1)
+  }
+
+  const effectiveCards = localSearch.cards
+  const effectiveTotal = localSearch.totalCount
+  const effectiveLoading = libraryLoading || localSearch.isLoading
+
+  const emptyState = libraryError
+    ? {
+        title: 'Card bundle missing',
+        body: 'Run "npm run sync:cards" to rebuild the local library, then reload the bundle.',
+      }
+    : libraryCards.length === 0
+      ? {
+          title: 'No cards loaded',
+          body: 'Run "npm run sync:cards" to generate the offline bundle.',
+        }
+      : undefined
+
+  return (
+    <div className='min-h-screen pb-8 text-white'>
+      <div className='mx-auto flex max-w-[1800px] flex-col gap-6 p-6'>
+        <header className='rounded-3xl border border-white/10 bg-slate-950/70 px-6 py-8 shadow-2xl shadow-black/60'>
+          <p className='text-xs uppercase tracking-[0.5em] text-emerald-300'>Pokédex Labs</p>
+          <div className='mt-3 flex flex-wrap items-end justify-between gap-4'>
+            <div>
+              <h1 className='text-4xl font-extrabold tracking-tight text-white md:text-5xl'>
+                Standard Deck Architect
+              </h1>
+              <p className='mt-2 max-w-2xl text-base text-slate-300'>
+                Explore every Standard-legal Pokémon card, drag them into your deck, and validate your list in real
+                time. Built for speed and competitive playtesting.
+              </p>
+            </div>
+            <div className='rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100'>
+              Card data sourced from <span className='font-semibold'>pokemon-tcg-data</span>. Run{' '}
+              <code>npm run sync:cards</code> after updating the dataset folder.
+            </div>
+          </div>
+        </header>
+
+        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveCard(null)}>
+          <div className='grid gap-6 xl:grid-cols-[320px_1fr_360px]'>
+            <FilterPanel
+              filters={filters}
+              onChange={handleFiltersChange}
+              onReset={resetFilters}
+              sets={availableSets}
+              types={availableTypes}
+              libraryStatus={{
+                count: libraryCards.length,
+                generatedAt: library?.generatedAt,
+                isLoading: libraryLoading || libraryFetching,
+              }}
+              onReloadLibrary={() => reloadLibrary()}
+            />
+            <CardGrid
+              cards={effectiveCards}
+              isLoading={effectiveLoading}
+              totalCount={effectiveTotal}
+              page={page}
+              pageSize={LOCAL_PAGE_SIZE}
+              onPageChange={(next) => setPage(next)}
+              onAdd={addCard}
+              deckCounts={deckCounts}
+              emptyState={emptyState}
+              onSelect={(card) => setPreviewCard(card)}
+              draggingCardId={draggingCardId}
+            />
+            <DeckPanel cardLibrary={libraryCards} libraryLoaded={libraryCards.length > 0} />
+          </div>
+
+          <DragOverlay dropAnimation={null}>
+            {activeCard ? <DragPreview card={activeCard} /> : null}
+          </DragOverlay>
+        </DndContext>
+        {previewCard ? <CardDetailModal card={previewCard} onClose={() => setPreviewCard(null)} /> : null}
+      </div>
     </div>
   )
 }
