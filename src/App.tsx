@@ -8,6 +8,7 @@ import { CardDetailModal } from '@/components/CardDetailModal'
 import type { CardLibraryPayload, CardSearchFilters, PokemonCard } from '@/types/pokemon'
 import { useDeckStore } from '@/state/useDeckStore'
 import { useLocalCardSearch, LOCAL_PAGE_SIZE } from '@/hooks/useLocalCardSearch'
+import { DeckLibraryPage } from '@/components/DeckLibraryPage'
 
 const DEFAULT_FILTERS: CardSearchFilters = {
   search: '',
@@ -43,6 +44,7 @@ function App() {
   const [activeCard, setActiveCard] = useState<PokemonCard | null>(null)
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
   const [previewCard, setPreviewCard] = useState<PokemonCard | null>(null)
+  const [activeView, setActiveView] = useState<'builder' | 'library'>('builder')
 
   const addCard = useDeckStore((state) => state.addCard)
   const deckCards = useDeckStore((state) => state.cards)
@@ -146,49 +148,79 @@ function App() {
                 time. Built for speed and competitive playtesting.
               </p>
             </div>
-            <div className='rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100'>
-              Card data sourced from <span className='font-semibold'>pokemon-tcg-data</span>. Run{' '}
-              <code>npm run sync:cards</code> after updating the dataset folder.
+            <div className='flex flex-col gap-3'>
+              <div className='rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100'>
+                Card data sourced from <span className='font-semibold'>pokemon-tcg-data</span>. Run{' '}
+                <code>npm run sync:cards</code> after updating the dataset folder.
+              </div>
+              <div className='inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 text-sm text-slate-100'>
+                <button
+                  className={`rounded-full px-3 py-1 transition ${
+                    activeView === 'builder'
+                      ? 'bg-emerald-500 text-emerald-950 font-semibold'
+                      : 'hover:bg-white/10'
+                  }`}
+                  onClick={() => setActiveView('builder')}
+                >
+                  Deck Builder
+                </button>
+                <button
+                  className={`rounded-full px-3 py-1 transition ${
+                    activeView === 'library'
+                      ? 'bg-emerald-500 text-emerald-950 font-semibold'
+                      : 'hover:bg-white/10'
+                  }`}
+                  onClick={() => setActiveView('library')}
+                >
+                  Deck Library
+                </button>
+              </div>
             </div>
           </div>
         </header>
 
-        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveCard(null)}>
-          <div className='grid gap-6 xl:grid-cols-[320px_1fr_360px]'>
-            <FilterPanel
-              filters={filters}
-              onChange={handleFiltersChange}
-              onReset={resetFilters}
-              sets={availableSets}
-              types={availableTypes}
-              libraryStatus={{
-                count: libraryCards.length,
-                generatedAt: library?.generatedAt,
-                isLoading: libraryLoading || libraryFetching,
-              }}
-              onReloadLibrary={() => reloadLibrary()}
-            />
-            <CardGrid
-              cards={effectiveCards}
-              isLoading={effectiveLoading}
-              totalCount={effectiveTotal}
-              page={page}
-              pageSize={LOCAL_PAGE_SIZE}
-              onPageChange={(next) => setPage(next)}
-              onAdd={addCard}
-              deckCounts={deckCounts}
-              emptyState={emptyState}
-              onSelect={(card) => setPreviewCard(card)}
-              draggingCardId={draggingCardId}
-            />
-            <DeckPanel cardLibrary={libraryCards} libraryLoaded={libraryCards.length > 0} />
-          </div>
+        {activeView === 'builder' ? (
+          <>
+            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveCard(null)}>
+              <div className='grid gap-6 xl:grid-cols-[320px_1fr_360px]'>
+                <FilterPanel
+                  filters={filters}
+                  onChange={handleFiltersChange}
+                  onReset={resetFilters}
+                  sets={availableSets}
+                  types={availableTypes}
+                  libraryStatus={{
+                    count: libraryCards.length,
+                    generatedAt: library?.generatedAt,
+                    isLoading: libraryLoading || libraryFetching,
+                  }}
+                  onReloadLibrary={() => reloadLibrary()}
+                />
+                <CardGrid
+                  cards={effectiveCards}
+                  isLoading={effectiveLoading}
+                  totalCount={effectiveTotal}
+                  page={page}
+                  pageSize={LOCAL_PAGE_SIZE}
+                  onPageChange={(next) => setPage(next)}
+                  onAdd={addCard}
+                  deckCounts={deckCounts}
+                  emptyState={emptyState}
+                  onSelect={(card) => setPreviewCard(card)}
+                  draggingCardId={draggingCardId}
+                />
+                <DeckPanel cardLibrary={libraryCards} libraryLoaded={libraryCards.length > 0} />
+              </div>
 
-          <DragOverlay dropAnimation={null}>
-            {activeCard ? <DragPreview card={activeCard} /> : null}
-          </DragOverlay>
-        </DndContext>
-        {previewCard ? <CardDetailModal card={previewCard} onClose={() => setPreviewCard(null)} /> : null}
+              <DragOverlay dropAnimation={null}>
+                {activeCard ? <DragPreview card={activeCard} /> : null}
+              </DragOverlay>
+            </DndContext>
+            {previewCard ? <CardDetailModal card={previewCard} onClose={() => setPreviewCard(null)} /> : null}
+          </>
+        ) : (
+          <DeckLibraryPage cardLibrary={libraryCards} libraryLoaded={libraryCards.length > 0} />
+        )}
       </div>
     </div>
   )

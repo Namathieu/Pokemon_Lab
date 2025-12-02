@@ -9,6 +9,13 @@ export interface PokemonCard {
   rarity?: string
   flavorText?: string
   regulationMark?: string
+  evolvesFrom?: string
+  rules?: string[]
+  attacks?: Attack[]
+  abilities?: Ability[]
+  weaknesses?: Weakness[]
+  resistances?: Weakness[]
+  retreatCost?: string[]
   set: PokemonSet
   images: {
     small: string
@@ -63,4 +70,22 @@ export interface CardLibraryPayload {
   generatedAt: string
   count: number
   cards: PokemonCard[]
+}
+
+export interface Attack {
+  name: string
+  text?: string
+  damage?: string
+  cost?: string[]
+}
+
+export interface Ability {
+  name: string
+  text?: string
+  type?: string
+}
+
+export interface Weakness {
+  type: string
+  value: string
 }
