@@ -25,6 +25,10 @@ public/data/standard-cards.json
 *.sln
 *.sw?
 
+# Environment files
+.env
+.env.*.local
+
 #lockfile
 package-lock.json
 pnpm-lock.yaml
