@@ -6,6 +6,7 @@ import type { DeckEntry, PokemonCard } from '@/types/pokemon'
 export interface StoredDeck {
   id: string
   deckName: string
+  eventId?: string
   tournamentTag?: string
   player?: string
   ranking?: string
@@ -15,13 +16,24 @@ export interface StoredDeck {
   createdAt: string
 }
 
+export interface DeckEvent {
+  id: string
+  name: string
+  date?: string
+  createdAt: string
+}
+
 interface DeckLibraryState {
   decks: StoredDeck[]
+  events: DeckEvent[]
+  addEvent(input: { name: string; date?: string }): DeckEvent
+  addHomebrewDeck(input: { deckName: string; entries: DeckEntry[] }): { success: boolean; message: string }
   addDeckFromImport(
     input: {
       text: string
       deckName?: string
       tournamentTag?: string
+      eventId?: string
       player?: string
       ranking?: string
       eventDate?: string
@@ -38,7 +50,59 @@ export const useDeckLibraryStore = create<DeckLibraryState>()(
   persist(
     (set, get) => ({
       decks: [],
+      events: [
+        {
+          id: 'untagged',
+          name: 'Untagged',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 'homebrew',
+          name: 'Homebrew',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      addEvent(input) {
+        const id = makeId()
+        const event: DeckEvent = {
+          id,
+          name: input.name.trim() || 'Untitled Event',
+          date: input.date,
+          createdAt: new Date().toISOString(),
+        }
+        set((state) => ({ events: [event, ...state.events] }))
+        return event
+      },
+      addHomebrewDeck(input) {
+        if (!input.entries.length) {
+          return { success: false, message: 'No cards to save.' }
+        }
+        const deck: StoredDeck = {
+          id: makeId(),
+          deckName: input.deckName?.trim() || 'Homebrew Deck',
+          eventId: 'homebrew',
+          tournamentTag: 'Homebrew',
+          importText: '[manual]',
+          entries: input.entries,
+          createdAt: new Date().toISOString(),
+        }
+        set((state) => ({
+          decks: [deck, ...state.decks],
+        }))
+        return { success: true, message: 'Saved to Homebrew.' }
+      },
       async addDeckFromImport(input, cards) {
+        const eventId = input.eventId && input.eventId.trim().length ? input.eventId.trim() : undefined
+        const event = eventId ? get().events.find((evt) => evt.id === eventId) : undefined
+
+        if (!event) {
+          return {
+            success: false,
+            message: 'Please select an event before importing a deck.',
+            errors: [],
+          }
+        }
+
         const errors: string[] = []
         const result = await importDeckFromText(input.text, { cards })
 
@@ -62,10 +126,11 @@ export const useDeckLibraryStore = create<DeckLibraryState>()(
         const next: StoredDeck = {
           id: makeId(),
           deckName: resolvedName,
-          tournamentTag: input.tournamentTag?.trim(),
+          eventId: event?.id,
+          tournamentTag: input.tournamentTag?.trim() || event?.name,
           player: input.player?.trim(),
           ranking: input.ranking?.trim(),
-          eventDate: input.eventDate,
+          eventDate: input.eventDate || event?.date,
           importText: input.text.trim(),
           entries: result.entries,
           createdAt: new Date().toISOString(),

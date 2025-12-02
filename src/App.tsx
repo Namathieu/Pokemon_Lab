@@ -9,6 +9,8 @@ import type { CardLibraryPayload, CardSearchFilters, PokemonCard } from '@/types
 import { useDeckStore } from '@/state/useDeckStore'
 import { useLocalCardSearch, LOCAL_PAGE_SIZE } from '@/hooks/useLocalCardSearch'
 import { DeckLibraryPage } from '@/components/DeckLibraryPage'
+import { EventManagerPage } from '@/components/EventManagerPage'
+import { getLocalCardImage, imageErrorHandler } from '@/utils/cardImages'
 
 const DEFAULT_FILTERS: CardSearchFilters = {
   search: '',
@@ -24,7 +26,12 @@ const DEFAULT_FILTERS: CardSearchFilters = {
 function DragPreview({ card }: { card: PokemonCard }) {
   return (
     <div className='rounded-2xl border border-emerald-400/70 bg-slate-900/80 p-3 shadow-2xl shadow-emerald-500/30'>
-      <img src={card.images.small} alt={card.name} className='h-44 w-auto rounded-xl border border-white/10' />
+      <img
+        src={getLocalCardImage(card)}
+        onError={imageErrorHandler(card)}
+        alt={card.name}
+        className='h-44 w-auto rounded-xl border border-white/10'
+      />
       <p className='mt-2 text-center text-sm font-semibold text-white'>{card.name}</p>
     </div>
   )
@@ -44,7 +51,7 @@ function App() {
   const [activeCard, setActiveCard] = useState<PokemonCard | null>(null)
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
   const [previewCard, setPreviewCard] = useState<PokemonCard | null>(null)
-  const [activeView, setActiveView] = useState<'builder' | 'library'>('builder')
+  const [activeView, setActiveView] = useState<'builder' | 'library' | 'events'>('builder')
 
   const addCard = useDeckStore((state) => state.addCard)
   const deckCards = useDeckStore((state) => state.cards)
@@ -174,6 +181,16 @@ function App() {
                 >
                   Deck Library
                 </button>
+                <button
+                  className={`rounded-full px-3 py-1 transition ${
+                    activeView === 'events'
+                      ? 'bg-emerald-500 text-emerald-950 font-semibold'
+                      : 'hover:bg-white/10'
+                  }`}
+                  onClick={() => setActiveView('events')}
+                >
+                  Event Manager
+                </button>
               </div>
             </div>
           </div>
@@ -219,7 +236,15 @@ function App() {
             {previewCard ? <CardDetailModal card={previewCard} onClose={() => setPreviewCard(null)} /> : null}
           </>
         ) : (
-          <DeckLibraryPage cardLibrary={libraryCards} libraryLoaded={libraryCards.length > 0} />
+          activeView === 'library' ? (
+            <DeckLibraryPage
+              cardLibrary={libraryCards}
+              libraryLoaded={libraryCards.length > 0}
+              onGoToEvents={() => setActiveView('events')}
+            />
+          ) : (
+            <EventManagerPage />
+          )
         )}
       </div>
     </div>

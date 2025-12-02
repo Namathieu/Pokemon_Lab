@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core'
 import type { PokemonCard } from '@/types/pokemon'
 import { Plus, Sparkles } from 'lucide-react'
 import clsx from 'clsx'
+import { getLocalCardImage, imageErrorHandler } from '@/utils/cardImages'
 
 interface CardGridProps {
   cards: PokemonCard[]
@@ -69,7 +70,8 @@ function CardTile({
         {...listeners}
       >
         <img
-          src={card.images.small}
+          src={getLocalCardImage(card)}
+          onError={imageErrorHandler(card)}
           alt={card.name}
           className='h-44 w-auto rounded-lg border border-white/5 shadow-inner shadow-black/60'
           draggable={false}

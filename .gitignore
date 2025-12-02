@@ -28,6 +28,7 @@ public/data/standard-cards.json
 # Environment files
 .env
 .env.*.local
+Analysis/
 
 #lockfile
 package-lock.json

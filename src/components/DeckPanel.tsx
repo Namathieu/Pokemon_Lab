@@ -7,6 +7,8 @@ import { MAX_DECK_SIZE, useDeckStore } from '@/state/useDeckStore'
 import type { DeckEntry, PokemonCard } from '@/types/pokemon'
 import { DeckImportExportDialog } from './DeckImportExportDialog'
 import { importDeckFromText } from '@/services/deckImporter'
+import { useDeckLibraryStore } from '@/state/useDeckLibraryStore'
+import { getLocalCardImage, imageErrorHandler } from '@/utils/cardImages'
 
 export const DECK_DROPPABLE_ID = 'deck-panel-drop-zone'
 
@@ -22,13 +24,14 @@ function DeckCardRow({
   onRemove(): void
 }) {
   return (
-    <div className='flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-900/50 p-3'>
-      <img
-        src={entry.card.images.small}
-        alt={entry.card.name}
-        className='h-20 w-auto rounded-xl border border-white/10'
-        draggable={false}
-      />
+        <div className='flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-900/50 p-3'>
+          <img
+            src={getLocalCardImage(entry.card)}
+            onError={imageErrorHandler(entry.card)}
+            alt={entry.card.name}
+            className='h-20 w-auto rounded-xl border border-white/10'
+            draggable={false}
+          />
       <div className='flex flex-1 flex-col'>
         <div className='flex items-center justify-between'>
           <div>
@@ -76,6 +79,8 @@ interface DeckPanelProps {
 
 export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedLibraryDeckId, setSelectedLibraryDeckId] = useState<string>('')
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const {
     deckName,
     cards,
@@ -89,12 +94,22 @@ export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
     lastError,
     acknowledgeError,
   } = useDeckStore()
+  const libraryDecks = useDeckLibraryStore((state) => state.decks)
+  const addHomebrewDeck = useDeckLibraryStore((state) => state.addHomebrewDeck)
 
   const pokemonNameIndex = useMemo(() => buildPokemonNameIndex(cardLibrary), [cardLibrary])
 
   const entries = useMemo(
     () => Object.values(cards).sort((a, b) => compareDeckEntries(a, b, pokemonNameIndex)),
     [cards, pokemonNameIndex],
+  )
+
+  const sortedLibraryDecks = useMemo(
+    () =>
+      [...libraryDecks].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [libraryDecks],
   )
 
   const stats = useMemo(() => computeDeckStats(entries), [entries])
@@ -119,10 +134,28 @@ export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
       message:
         result.entries.length === 0
           ? 'No cards imported. Please double-check your list.'
-          : importOutcome.success
+        : importOutcome.success
             ? `Imported ${totalImported} cards.`
             : combinedErrors[0] ?? 'Deck import failed.',
     }
+  }
+
+  const handleLoadFromLibrary = () => {
+    if (!selectedLibraryDeckId) return
+    const deck = sortedLibraryDecks.find((item) => item.id === selectedLibraryDeckId)
+    if (!deck) return
+    setDeck(deck.entries, deck.deckName)
+    setSaveMessage(null)
+  }
+
+  const handleSaveHomebrew = () => {
+    const entries = Object.values(cards)
+    if (!entries.length) {
+      setSaveMessage('Add cards before saving.')
+      return
+    }
+    const result = addHomebrewDeck({ deckName, entries })
+    setSaveMessage(result.message)
   }
 
   return (
@@ -132,30 +165,64 @@ export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
         isOver ? 'bg-emerald-500/10' : 'bg-slate-950/60'
       }`}
     >
-      <div className='flex items-center justify-between gap-2'>
-        <div className='flex-1'>
-          <p className='text-xs uppercase tracking-[0.3em] text-slate-500'>Your Deck</p>
-          <input
-            className='mt-1 w-full rounded-xl border border-transparent bg-transparent text-2xl font-semibold text-white focus:border-emerald-400 focus:outline-none'
-            value={deckName}
-            onChange={(event) => renameDeck(event.target.value)}
-          />
+      <div className='flex flex-col gap-3'>
+        <div className='flex flex-wrap items-center gap-3'>
+          <div className='min-w-[200px] flex-1'>
+            <p className='text-xs uppercase tracking-[0.3em] text-slate-500'>Your Deck</p>
+            <input
+              className='mt-1 w-full rounded-xl border border-transparent bg-transparent text-2xl font-semibold text-white focus:border-emerald-400 focus:outline-none'
+              value={deckName}
+              onChange={(event) => renameDeck(event.target.value)}
+            />
+          </div>
+          <div className='flex flex-wrap gap-2'>
+            <button
+              className='inline-flex items-center gap-1 rounded-full border border-slate-600/70 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-rose-400 hover:text-rose-200'
+              onClick={clearDeck}
+            >
+              <Trash2 size={14} />
+              Clear
+            </button>
+            <button
+              className='inline-flex items-center gap-1 rounded-full border border-emerald-400/70 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/10'
+              onClick={() => setDialogOpen(true)}
+            >
+              <Upload size={14} />
+              Import / Export
+            </button>
+          </div>
         </div>
-        <div className='flex gap-2'>
+        {sortedLibraryDecks.length > 0 && (
+          <div className='flex flex-wrap items-center gap-2'>
+            <select
+              className='w-full min-w-[220px] max-w-xs rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2 text-xs text-white focus:border-emerald-400 focus:outline-none sm:w-72'
+              value={selectedLibraryDeckId}
+              onChange={(event) => setSelectedLibraryDeckId(event.target.value)}
+            >
+              <option value=''>Load saved deck...</option>
+              {sortedLibraryDecks.map((deck) => (
+                <option key={deck.id} value={deck.id}>
+                  {deck.deckName} {deck.tournamentTag ? `(${deck.tournamentTag})` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              className='rounded-full border border-sky-400/70 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60'
+              onClick={handleLoadFromLibrary}
+              disabled={!selectedLibraryDeckId}
+            >
+              Load
+            </button>
+          </div>
+        )}
+        <div className='flex flex-wrap items-center gap-2'>
           <button
-            className='inline-flex items-center gap-1 rounded-full border border-slate-600/70 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-rose-400 hover:text-rose-200'
-            onClick={clearDeck}
+            className='rounded-full border border-emerald-400/70 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/10'
+            onClick={handleSaveHomebrew}
           >
-            <Trash2 size={14} />
-            Clear
+            Save as Homebrew
           </button>
-          <button
-            className='inline-flex items-center gap-1 rounded-full border border-emerald-400/70 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/10'
-            onClick={() => setDialogOpen(true)}
-          >
-            <Upload size={14} />
-            Import / Export
-          </button>
+          {saveMessage && <span className='text-xs text-slate-300'>{saveMessage}</span>}
         </div>
       </div>
 

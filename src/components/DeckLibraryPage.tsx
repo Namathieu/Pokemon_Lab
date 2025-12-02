@@ -5,21 +5,22 @@ import { useDeckLibraryStore } from '@/state/useDeckLibraryStore'
 interface DeckLibraryPageProps {
   cardLibrary: PokemonCard[]
   libraryLoaded: boolean
+  onGoToEvents?(): void
 }
 
-export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageProps) {
+export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: DeckLibraryPageProps) {
   const [deckText, setDeckText] = useState('')
   const [deckName, setDeckName] = useState('')
-  const [tournamentTag, setTournamentTag] = useState('')
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [player, setPlayer] = useState('')
   const [ranking, setRanking] = useState('')
-  const [eventDate, setEventDate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ variant: 'success' | 'error'; message: string; errors?: string[] } | null>(
     null,
   )
 
   const decks = useDeckLibraryStore((state) => state.decks)
+  const events = useDeckLibraryStore((state) => state.events)
   const addDeckFromImport = useDeckLibraryStore((state) => state.addDeckFromImport)
   const removeDeck = useDeckLibraryStore((state) => state.removeDeck)
 
@@ -44,12 +45,13 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
   }, [sortedDecks])
 
   const exportTrainingData = () => {
-    if (sortedDecks.length === 0) {
+    const exportable = sortedDecks.filter((deck) => deck.eventId !== 'homebrew')
+    if (exportable.length === 0) {
       setFeedback({ variant: 'error', message: 'No stored decks to export.' })
       return
     }
 
-    const samples = sortedDecks.map((deck) => {
+    const samples = exportable.map((deck) => {
       const totalCards = deck.entries.reduce((sum, entry) => sum + entry.count, 0)
       const countsBySupertype: Record<string, number> = {}
       const typesFrequency: Record<string, number> = {}
@@ -65,6 +67,7 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
         deck_id: deck.id,
         deck_name: deck.deckName,
         tournament_tag: deck.tournamentTag,
+        event_id: deck.eventId,
         player: deck.player,
         ranking: deck.ranking,
         event_date: deck.eventDate,
@@ -114,6 +117,13 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
     setIsSaving(true)
     setFeedback(null)
     try {
+      if (!selectedEventId) {
+        setFeedback({
+          variant: 'error',
+          message: 'Select an event before importing a deck.',
+        })
+        return
+      }
       if (!libraryLoaded) {
         setFeedback({
           variant: 'error',
@@ -125,10 +135,9 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
         {
           text: deckText,
           deckName,
-          tournamentTag,
+          eventId: selectedEventId,
           player,
           ranking,
-          eventDate,
         },
         cardLibrary,
       )
@@ -160,8 +169,37 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
               placing). These entries are stored locally for future analysis.
             </p>
           </div>
-          <div className='rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100'>
-            Card data loaded: <span className='font-semibold'>{libraryLoaded ? 'Yes' : 'No'}</span>
+          <div className='flex flex-col gap-2 text-sm text-emerald-100'>
+            <div className='rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3'>
+              Card data loaded: <span className='font-semibold'>{libraryLoaded ? 'Yes' : 'No'}</span>
+            </div>
+            <div className='rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-100'>
+              <p className='text-xs uppercase tracking-[0.3em] text-slate-400'>Event</p>
+              <div className='mt-2 flex flex-col gap-2'>
+              <div className='grid gap-2'>
+                <select
+                  className='rounded-xl border border-slate-700/70 bg-slate-950/70 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none'
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
+                >
+                  <option value='' disabled>
+                    Select an event
+                  </option>
+                  {events.map((evt) => (
+                    <option key={evt.id} value={evt.id}>
+                      {evt.name} {evt.date ? `(${evt.date})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className='rounded-xl border border-emerald-400/60 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/10'
+                  onClick={() => onGoToEvents?.()}
+                >
+                  Manage events
+                </button>
+              </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -174,15 +212,6 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
                 placeholder='e.g., Gholdengo Control'
                 value={deckName}
                 onChange={(e) => setDeckName(e.target.value)}
-              />
-            </label>
-            <label className='block text-sm font-semibold text-slate-200'>
-              Tournament tag
-              <input
-                className='mt-1 w-full rounded-xl border border-slate-700/70 bg-slate-950/70 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none'
-                placeholder='e.g., NAIC 2025'
-                value={tournamentTag}
-                onChange={(e) => setTournamentTag(e.target.value)}
               />
             </label>
             <div className='grid gap-3 md:grid-cols-2'>
@@ -205,15 +234,6 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
                 />
               </label>
             </div>
-            <label className='block text-sm font-semibold text-slate-200'>
-              Tournament date
-              <input
-                type='date'
-                className='mt-1 w-full rounded-xl border border-slate-700/70 bg-slate-950/70 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none'
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-              />
-            </label>
           </div>
           <div className='flex flex-col'>
             <label className='text-sm font-semibold text-slate-200'>
@@ -238,10 +258,8 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
                 onClick={() => {
                   setDeckText('')
                   setDeckName('')
-                  setTournamentTag('')
                   setPlayer('')
                   setRanking('')
-                  setEventDate('')
                   setFeedback(null)
                 }}
               >
@@ -274,7 +292,7 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded }: DeckLibraryPageP
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-semibold text-white'>Stored decks</h3>
           <div className='flex items-center gap-3 text-sm text-slate-400'>
-            <p>Total: {sortedDecks.length}</p>
+            <p>Total: {sortedDecks.length} (Homebrew decks stay local, excluded from exports)</p>
             <button
               className='rounded-full border border-slate-700/70 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-emerald-400 hover:text-emerald-100'
               onClick={exportTrainingData}

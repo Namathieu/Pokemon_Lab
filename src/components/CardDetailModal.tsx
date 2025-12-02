@@ -1,4 +1,5 @@
 import type { PokemonCard } from '@/types/pokemon'
+import { getLocalCardImage, imageErrorHandler } from '@/utils/cardImages'
 
 interface CardDetailModalProps {
   card: PokemonCard
@@ -18,7 +19,8 @@ export function CardDetailModal({ card, onClose }: CardDetailModalProps) {
         <div className='flex flex-col gap-6 lg:flex-row'>
           <div className='flex flex-col items-center gap-4 lg:w-1/2'>
             <img
-              src={card.images.large ?? card.images.small}
+              src={getLocalCardImage(card, 'large')}
+              onError={imageErrorHandler(card, 'large')}
               alt={card.name}
               className='w-full max-w-sm rounded-2xl border border-white/10 shadow-lg shadow-black/50'
             />
