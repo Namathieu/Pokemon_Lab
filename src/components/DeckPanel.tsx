@@ -234,6 +234,7 @@ export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
         isOpen={dialogOpen}
         onClose={() => setDialogOpen(false)}
         exportedText={exportText()}
+        deckName={deckName}
         onImport={handleImport}
       />
     </section>

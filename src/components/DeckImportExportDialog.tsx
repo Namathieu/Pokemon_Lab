@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X, Clipboard, Check } from 'lucide-react'
+import { X, Clipboard, Check, Download } from 'lucide-react'
 
 interface DeckImportExportDialogProps {
   isOpen: boolean
   onClose(): void
   exportedText: string
+  deckName: string
   onImport(text: string): Promise<{ errors: string[]; message: string }>
 }
 
@@ -12,6 +13,7 @@ export function DeckImportExportDialog({
   isOpen,
   onClose,
   exportedText,
+  deckName,
   onImport,
 }: DeckImportExportDialogProps) {
   const [importText, setImportText] = useState('')
@@ -43,6 +45,26 @@ export function DeckImportExportDialog({
     } catch {
       setFeedback({
         message: 'Unable to copy to clipboard. Please copy manually.',
+        variant: 'error',
+      })
+    }
+  }
+
+  const handleDownload = () => {
+    try {
+      const blob = new Blob([exportedText], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const safeName = (deckName || 'decklist').trim() || 'decklist'
+      link.href = url
+      link.download = `${safeName.replace(/[^a-z0-9-_]+/gi, '_')}.txt`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setFeedback({
+        message: (error as Error).message ?? 'Unable to create download.',
         variant: 'error',
       })
     }
@@ -87,21 +109,29 @@ export function DeckImportExportDialog({
         <div className='mt-6 grid gap-6 md:grid-cols-2'>
           <div className='rounded-2xl border border-white/5 bg-slate-900/60 p-4'>
             <div className='flex items-center justify-between text-sm font-semibold text-white'>
-              <span>Export current deck</span>
-              <button
-                className='inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-1 text-xs text-slate-200 transition hover:border-emerald-400 hover:text-emerald-300'
-                onClick={handleCopy}
-              >
-                {copyState === 'copied' ? (
-                  <>
-                    <Check size={14} /> Copied
-                  </>
-                ) : (
-                  <>
-                    <Clipboard size={14} /> Copy
-                  </>
-                )}
-              </button>
+              <span>Export current deck (Pokemon TCG format)</span>
+              <div className='flex gap-2'>
+                <button
+                  className='inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-1 text-xs text-slate-200 transition hover:border-emerald-400 hover:text-emerald-300'
+                  onClick={handleCopy}
+                >
+                  {copyState === 'copied' ? (
+                    <>
+                      <Check size={14} /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard size={14} /> Copy
+                    </>
+                  )}
+                </button>
+                <button
+                  className='inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-200'
+                  onClick={handleDownload}
+                >
+                  <Download size={14} /> Download
+                </button>
+              </div>
             </div>
             <textarea
               readOnly
@@ -111,10 +141,10 @@ export function DeckImportExportDialog({
           </div>
 
           <div className='rounded-2xl border border-white/5 bg-slate-900/60 p-4'>
-            <p className='text-sm font-semibold text-white'>Import from Pokémon TCG text format</p>
+            <p className='text-sm font-semibold text-white'>Import from Pokemon TCG text format</p>
             <textarea
               className='mt-3 h-64 w-full rounded-xl border border-slate-700/70 bg-slate-950/70 p-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none'
-              placeholder='Paste a standard Pokémon TCG deck list here...'
+              placeholder='Paste a standard Pokemon TCG deck list here...'
               value={importText}
               onChange={(event) => setImportText(event.target.value)}
             />
@@ -123,7 +153,7 @@ export function DeckImportExportDialog({
               disabled={importDisabled}
               onClick={handleImport}
             >
-              {isImporting ? 'Importing…' : 'Import deck'}
+              {isImporting ? 'Importing...' : 'Import deck'}
             </button>
           </div>
         </div>

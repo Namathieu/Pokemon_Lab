@@ -80,6 +80,28 @@ function findCard(cards: PokemonCard[], setCode: string, cardNumber: string) {
   )
 }
 
+function isBasicEnergy(card: PokemonCard) {
+  return (
+    card.supertype?.toLowerCase() === 'energy' &&
+    (card.subtypes ?? []).some((subtype) => subtype.toLowerCase() === 'basic')
+  )
+}
+
+function findBasicEnergyFallback(cards: PokemonCard[], name: string) {
+  // Try to infer energy type from names like "Fighting Energy", "Water Basic Energy", etc.
+  const match = name.match(/^([\w-]+)\s+energy/i)
+  const energyType = match?.[1]?.toLowerCase()
+  const normalizedName = name.trim().toLowerCase().replace(/\s+/g, ' ')
+
+  return cards.find((card) => {
+    if (!isBasicEnergy(card)) return false
+    const types = (card.types ?? []).map((type) => type.toLowerCase())
+    const nameMatches = card.name?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedName
+    const typeMatches = energyType ? types.includes(energyType) : false
+    return nameMatches || typeMatches
+  })
+}
+
 export async function importDeckFromText(
   text: string,
   options: { cards: PokemonCard[] },
@@ -90,7 +112,9 @@ export async function importDeckFromText(
 
   for (const line of lines) {
     try {
-      const card = findCard(options.cards, line.setCode, line.cardNumber)
+      const card =
+        findCard(options.cards, line.setCode, line.cardNumber) ??
+        findBasicEnergyFallback(options.cards, line.name)
       if (!card) {
         errors.push(`No match for ${line.count}x ${line.name} (${line.setCode} ${line.cardNumber})`)
         continue
