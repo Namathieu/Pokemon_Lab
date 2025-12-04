@@ -11,6 +11,7 @@ import { useLocalCardSearch, LOCAL_PAGE_SIZE } from '@/hooks/useLocalCardSearch'
 import { DeckLibraryPage } from '@/pages/DeckLibraryPage'
 import { EventManagerPage } from '@/pages/EventManagerPage'
 import { DeckViewerPage } from '@/pages/DeckViewerPage'
+import { AIBuilderPage } from '@/pages/AIBuilderPage'
 import { getLocalCardImage, imageErrorHandler } from '@/utils/cardImages'
 
 const DEFAULT_FILTERS: CardSearchFilters = {
@@ -52,7 +53,7 @@ function App() {
   const [activeCard, setActiveCard] = useState<PokemonCard | null>(null)
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
   const [previewCard, setPreviewCard] = useState<PokemonCard | null>(null)
-  const [activeView, setActiveView] = useState<'builder' | 'library' | 'events' | 'viewer'>('builder')
+  const [activeView, setActiveView] = useState<'builder' | 'library' | 'events' | 'viewer' | 'ai'>('builder')
 
   const addCard = useDeckStore((state) => state.addCard)
   const deckCards = useDeckStore((state) => state.cards)
@@ -184,6 +185,16 @@ function App() {
                 </button>
                 <button
                   className={`rounded-full px-3 py-1 transition ${
+                    activeView === 'ai'
+                      ? 'bg-emerald-500 text-emerald-950 font-semibold'
+                      : 'hover:bg-white/10'
+                  }`}
+                  onClick={() => setActiveView('ai')}
+                >
+                  AI Builder
+                </button>
+                <button
+                  className={`rounded-full px-3 py-1 transition ${
                     activeView === 'viewer'
                       ? 'bg-emerald-500 text-emerald-950 font-semibold'
                       : 'hover:bg-white/10'
@@ -252,6 +263,12 @@ function App() {
               cardLibrary={libraryCards}
               libraryLoaded={libraryCards.length > 0}
               onGoToEvents={() => setActiveView('events')}
+            />
+          ) : activeView === 'ai' ? (
+            <AIBuilderPage
+              cardLibrary={libraryCards}
+              libraryLoaded={libraryCards.length > 0}
+              onGoToBuilder={() => setActiveView('builder')}
             />
           ) : activeView === 'viewer' ? (
             <DeckViewerPage />
