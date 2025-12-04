@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import type { PokemonCard } from '@/types/pokemon'
 import { useDeckLibraryStore } from '@/state/useDeckLibraryStore'
+import { fetchLimitlessDecks, parseLimitlessHtml } from '@/services/limitlessHtml'
 
 interface DeckLibraryPageProps {
   cardLibrary: PokemonCard[]
@@ -15,14 +16,20 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
   const [player, setPlayer] = useState('')
   const [ranking, setRanking] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [isLimitlessImporting, setIsLimitlessImporting] = useState(false)
   const [feedback, setFeedback] = useState<{ variant: 'success' | 'error'; message: string; errors?: string[] } | null>(
     null,
   )
+  const [limitlessUrl, setLimitlessUrl] = useState('')
+  const [limitlessTop, setLimitlessTop] = useState<string>('')
 
   const decks = useDeckLibraryStore((state) => state.decks)
   const events = useDeckLibraryStore((state) => state.events)
+  const addEvent = useDeckLibraryStore((state) => state.addEvent)
   const addDeckFromImport = useDeckLibraryStore((state) => state.addDeckFromImport)
   const removeDeck = useDeckLibraryStore((state) => state.removeDeck)
+  const hasImportedSource = useDeckLibraryStore((state) => state.hasImportedSource)
+  const markImportedSource = useDeckLibraryStore((state) => state.markImportedSource)
 
   const sortedDecks = useMemo(
     () =>
@@ -31,6 +38,12 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
       }),
     [decks],
   )
+
+  const rankingValue = (ranking?: string) => {
+    if (!ranking) return Number.POSITIVE_INFINITY
+    const numeric = ranking.match(/\d+/)
+    return numeric ? Number(numeric[0]) : Number.POSITIVE_INFINITY
+  }
 
   const groupedByTournament = useMemo(() => {
     const map = new Map<string, typeof sortedDecks>()
@@ -41,8 +54,64 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
       }
       map.get(key)!.push(deck)
     })
-    return Array.from(map.entries())
+    return Array.from(map.entries()).map(([tag, tagDecks]) => {
+      const sorted = [...tagDecks].sort((a, b) => {
+        const ra = rankingValue(a.ranking)
+        const rb = rankingValue(b.ranking)
+        if (ra !== rb) return ra - rb
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      })
+      return [tag, sorted] as const
+    })
   }, [sortedDecks])
+
+  useEffect(() => {
+    const ipc = (window as any).ipcRenderer
+    if (!libraryLoaded || !ipc?.invoke) return
+
+    const importFromFiles = async () => {
+      try {
+        const files: { file: string; payload: any }[] = await ipc.invoke('limitless:list-json')
+        for (const file of files) {
+          const sourceKey = `limitless:${file.file}`
+          if (hasImportedSource(sourceKey)) continue
+
+          const payload = file.payload ?? {}
+          const decksToImport = Array.isArray(payload.decks) ? payload.decks : []
+          if (!decksToImport.length) {
+            markImportedSource(sourceKey)
+            continue
+          }
+
+          const eventName = (payload.eventName as string) ?? 'Imported Event'
+          const eventDate = (payload.eventDate as string) ?? ''
+          const existing = events.find(
+            (evt) => evt.name === eventName && (evt.date ?? '') === (eventDate ?? ''),
+          )
+          const event = existing ?? addEvent({ name: eventName, date: eventDate })
+
+          for (const deck of decksToImport) {
+            await addDeckFromImport(
+              {
+                text: deck.text ?? '',
+                deckName: deck.deckName ?? deck.deckname ?? 'Imported Deck',
+                eventId: event.id,
+                player: deck.player ?? '',
+                ranking: deck.placing ?? '',
+              },
+              cardLibrary,
+            )
+          }
+
+          markImportedSource(sourceKey)
+        }
+      } catch (error) {
+        console.error('Auto import failed', error)
+      }
+    }
+
+    importFromFiles()
+  }, [libraryLoaded, cardLibrary, addDeckFromImport, addEvent, events, hasImportedSource, markImportedSource])
 
   const exportTrainingData = () => {
     const exportable = sortedDecks.filter((deck) => deck.eventId !== 'homebrew')
@@ -154,6 +223,86 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
       })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleLimitlessImport = async () => {
+    if (!limitlessUrl.trim()) {
+      setFeedback({ variant: 'error', message: 'Enter a Limitless decklists URL.' })
+      return
+    }
+    if (!libraryLoaded) {
+      setFeedback({
+        variant: 'error',
+        message: 'Card library is not loaded. Run sync and reload, then try again.',
+      })
+      return
+    }
+    setIsLimitlessImporting(true)
+    setFeedback(null)
+    try {
+      const top = Number(limitlessTop)
+      const limit = Number.isFinite(top) && top > 0 ? top : undefined
+
+      // Try IPC fetch first to avoid CORS; fall back to browser fetch.
+      const ipc = (window as any).ipcRenderer
+      let payload
+      if (ipc?.invoke) {
+        const result = await ipc.invoke('limitless:fetch-html', limitlessUrl.trim())
+        if (result?.ok && result.html) {
+          payload = parseLimitlessHtml(result.html, limitlessUrl.trim(), limit)
+        } else if (result?.error) {
+          throw new Error(result.error)
+        }
+      }
+
+      if (!payload) {
+        payload = await fetchLimitlessDecks(limitlessUrl.trim(), limit)
+      }
+
+      if (!payload.decks.length) {
+        setFeedback({ variant: 'error', message: 'No decks found on that page.' })
+        return
+      }
+
+      const existing = events.find(
+        (evt) => evt.name === payload.eventName && (evt.date ?? '') === (payload.eventDate ?? ''),
+      )
+      const event = existing ?? addEvent({ name: payload.eventName, date: payload.eventDate })
+
+      const errors: string[] = []
+      let successCount = 0
+      for (const deck of payload.decks) {
+        const result = await addDeckFromImport(
+          {
+            text: deck.text ?? '',
+            deckName: deck.deckName ?? 'Imported Deck',
+            eventId: event.id,
+            player: deck.player ?? '',
+            ranking: deck.placing ?? '',
+          },
+          cardLibrary,
+        )
+        if (result.success) {
+          successCount += 1
+          if (result.errors.length) errors.push(...result.errors)
+        } else {
+          errors.push(result.message)
+        }
+      }
+
+      setFeedback({
+        variant: errors.length ? 'error' : 'success',
+        message: `Imported ${successCount} deck(s) from Limitless into event "${event.name}".`,
+        errors,
+      })
+    } catch (error) {
+      setFeedback({
+        variant: 'error',
+        message: (error as Error).message ?? 'Failed to import from Limitless.',
+      })
+    } finally {
+      setIsLimitlessImporting(false)
     }
   }
 
@@ -285,6 +434,47 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className='rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/60'>
+        <div className='flex flex-wrap items-center justify-between gap-4'>
+          <div>
+            <p className='text-xs uppercase tracking-[0.4em] text-emerald-300'>Limitless Import</p>
+            <h3 className='text-2xl font-bold text-white'>Fetch decks directly from a Limitless decklists URL</h3>
+            <p className='mt-2 max-w-3xl text-sm text-slate-300'>
+              Paste the decklists page URL, optionally set a Top N filter (leave blank for all), and the app will fetch,
+              parse, and store the decks under the detected event.
+            </p>
+          </div>
+        </div>
+        <div className='mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto] items-end'>
+          <label className='block text-sm font-semibold text-slate-200'>
+            Decklists URL
+            <input
+              className='mt-1 w-full rounded-xl border border-slate-700/70 bg-slate-950/70 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none'
+              placeholder='https://limitlesstcg.com/tournaments/500/decklists'
+              value={limitlessUrl}
+              onChange={(e) => setLimitlessUrl(e.target.value)}
+            />
+          </label>
+          <label className='block text-sm font-semibold text-slate-200'>
+            Top N (optional)
+            <input
+              className='mt-1 w-full rounded-xl border border-slate-700/70 bg-slate-950/70 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none'
+              placeholder='e.g., 20'
+              value={limitlessTop}
+              onChange={(e) => setLimitlessTop(e.target.value)}
+              inputMode='numeric'
+            />
+          </label>
+          <button
+            className='rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-500/40 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-400'
+            onClick={handleLimitlessImport}
+            disabled={isLimitlessImporting}
+          >
+            {isLimitlessImporting ? 'Importing...' : 'Fetch & Import'}
+          </button>
         </div>
       </div>
 

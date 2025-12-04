@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { update } from './update'
@@ -42,6 +43,7 @@ if (!app.requestSingleInstanceLock()) {
 let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
+const LIMITLESS_DIR = path.join(process.env.APP_ROOT, 'imports', 'limitless')
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -119,5 +121,31 @@ ipcMain.handle('open-win', (_, arg) => {
     childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
   } else {
     childWindow.loadFile(indexHtml, { hash: arg })
+  }
+})
+
+ipcMain.handle('limitless:list-json', async () => {
+  try {
+    if (!fs.existsSync(LIMITLESS_DIR)) return []
+    const files = fs.readdirSync(LIMITLESS_DIR).filter((file) => file.endsWith('.json'))
+    return files.map((file) => {
+      const fullPath = path.join(LIMITLESS_DIR, file)
+      const payload = JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
+      return { file, path: fullPath, payload }
+    })
+  } catch (error) {
+    console.error('limitless:list-json failed', error)
+    return []
+  }
+})
+
+ipcMain.handle('limitless:fetch-html', async (_event, url: string) => {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`)
+    return { ok: true, html: await res.text() }
+  } catch (error) {
+    console.error('limitless:fetch-html failed', error)
+    return { ok: false, error: (error as Error).message }
   }
 })

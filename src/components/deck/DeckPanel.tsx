@@ -104,13 +104,22 @@ export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
     [cards, pokemonNameIndex],
   )
 
-  const sortedLibraryDecks = useMemo(
-    () =>
-      [...libraryDecks].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    [libraryDecks],
-  )
+  const rankingValue = (ranking?: string) => {
+    if (!ranking) return Number.POSITIVE_INFINITY
+    const match = ranking.match(/\d+/)
+    return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+  }
+
+  const sortedLibraryDecks = useMemo(() => {
+    const decksCopy = [...libraryDecks]
+    decksCopy.sort((a, b) => {
+      const ra = rankingValue(a.ranking)
+      const rb = rankingValue(b.ranking)
+      if (ra !== rb) return ra - rb
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    })
+    return decksCopy
+  }, [libraryDecks])
 
   const stats = useMemo(() => computeDeckStats(entries), [entries])
   const { isOver, setNodeRef } = useDroppable({ id: DECK_DROPPABLE_ID })
@@ -202,7 +211,9 @@ export function DeckPanel({ cardLibrary, libraryLoaded }: DeckPanelProps) {
               <option value=''>Load saved deck...</option>
               {sortedLibraryDecks.map((deck) => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.deckName} {deck.tournamentTag ? `(${deck.tournamentTag})` : ''}
+                  {deck.deckName}
+                  {deck.tournamentTag ? ` (${deck.tournamentTag}${deck.eventDate ? ` · ${deck.eventDate}` : ''})` : ''}
+                  {deck.ranking ? ` · ${deck.ranking}` : ''}
                 </option>
               ))}
             </select>

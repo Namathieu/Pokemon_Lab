@@ -102,6 +102,34 @@ function findBasicEnergyFallback(cards: PokemonCard[], name: string) {
   })
 }
 
+function normalizeName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function findByName(cards: PokemonCard[], name: string) {
+  const target = normalizeName(name)
+  const exact = cards.find((card) => normalizeName(card.name ?? '') === target)
+  if (exact) return exact
+  // loose contains match as a fallback
+  return cards.find((card) => normalizeName(card.name ?? '').includes(target))
+}
+
+function findByBaseName(cards: PokemonCard[], name: string) {
+  const base = normalizeName(name).replace(/\b(ex|vstar|vmax|v-union|v|gx|ex)\b/g, '').trim()
+  if (!base) return undefined
+  return cards.find((card) => {
+    const cardBase = normalizeName(card.name ?? '').replace(
+      /\b(ex|vstar|vmax|v-union|v|gx|ex)\b/g,
+      '',
+    ).trim()
+    return cardBase === base
+  })
+}
+
 export async function importDeckFromText(
   text: string,
   options: { cards: PokemonCard[] },
@@ -112,9 +140,12 @@ export async function importDeckFromText(
 
   for (const line of lines) {
     try {
-      const card =
+      let card =
         findCard(options.cards, line.setCode, line.cardNumber) ??
-        findBasicEnergyFallback(options.cards, line.name)
+        findBasicEnergyFallback(options.cards, line.name) ??
+        findByName(options.cards, line.name) ??
+        findByBaseName(options.cards, line.name)
+
       if (!card) {
         errors.push(`No match for ${line.count}x ${line.name} (${line.setCode} ${line.cardNumber})`)
         continue

@@ -20,7 +20,6 @@
     "test": "vitest run",
     "sync:cards": "node scripts/fetch-cards.mjs",
     "sync:images": "node scripts/download-card-images.mjs",
-    "import:limitless": "node scripts/import-limitless.mjs",
     "import:limitless-html": "node scripts/import-limitless-html.mjs"
   },
   "dependencies": {

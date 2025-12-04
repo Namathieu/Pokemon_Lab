@@ -26,6 +26,7 @@ export interface DeckEvent {
 interface DeckLibraryState {
   decks: StoredDeck[]
   events: DeckEvent[]
+  importedSources: string[]
   addEvent(input: { name: string; date?: string }): DeckEvent
   addHomebrewDeck(input: { deckName: string; entries: DeckEntry[] }): { success: boolean; message: string }
   removeEvent(id: string): { removedDecks: number; removedEvent: boolean }
@@ -42,6 +43,8 @@ interface DeckLibraryState {
     cards: PokemonCard[],
   ): Promise<{ success: boolean; message: string; errors: string[] }>
   removeDeck(id: string): void
+  hasImportedSource(source: string): boolean
+  markImportedSource(source: string): void
   clear(): void
 }
 
@@ -63,6 +66,7 @@ export const useDeckLibraryStore = create<DeckLibraryState>()(
           createdAt: new Date().toISOString(),
         },
       ],
+      importedSources: [],
       addEvent(input) {
         const id = makeId()
         const event: DeckEvent = {
@@ -170,8 +174,18 @@ export const useDeckLibraryStore = create<DeckLibraryState>()(
       removeDeck(id) {
         set((state) => ({ decks: state.decks.filter((deck) => deck.id !== id) }))
       },
+      hasImportedSource(source) {
+        return get().importedSources.includes(source)
+      },
+      markImportedSource(source) {
+        set((state) => ({
+          importedSources: state.importedSources.includes(source)
+            ? state.importedSources
+            : [...state.importedSources, source],
+        }))
+      },
       clear() {
-        set({ decks: [] })
+        set({ decks: [], importedSources: [] })
       },
     }),
     {

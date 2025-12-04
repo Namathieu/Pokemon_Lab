@@ -30,7 +30,8 @@ public/cards/
 .env
 .env.*.local
 Analysis/
-public/cards
+tempo/
+imports/
 
 #lockfile
 package-lock.json
