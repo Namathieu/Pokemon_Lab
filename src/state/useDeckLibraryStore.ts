@@ -28,6 +28,7 @@ interface DeckLibraryState {
   events: DeckEvent[]
   addEvent(input: { name: string; date?: string }): DeckEvent
   addHomebrewDeck(input: { deckName: string; entries: DeckEntry[] }): { success: boolean; message: string }
+  removeEvent(id: string): { removedDecks: number; removedEvent: boolean }
   addDeckFromImport(
     input: {
       text: string
@@ -90,6 +91,24 @@ export const useDeckLibraryStore = create<DeckLibraryState>()(
           decks: [deck, ...state.decks],
         }))
         return { success: true, message: 'Saved to Homebrew.' }
+      },
+      removeEvent(id) {
+        if (id === 'untagged' || id === 'homebrew') {
+          return { removedDecks: 0, removedEvent: false }
+        }
+        let removedDecks = 0
+        set((state) => {
+          const filteredDecks = state.decks.filter((deck) => {
+            if (deck.eventId === id) {
+              removedDecks += 1
+              return false
+            }
+            return true
+          })
+          const filteredEvents = state.events.filter((evt) => evt.id !== id)
+          return { decks: filteredDecks, events: filteredEvents }
+        })
+        return { removedDecks, removedEvent: true }
       },
       async addDeckFromImport(input, cards) {
         const eventId = input.eventId && input.eventId.trim().length ? input.eventId.trim() : undefined

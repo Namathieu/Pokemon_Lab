@@ -3,9 +3,16 @@ import { useDeckLibraryStore } from '@/state/useDeckLibraryStore'
 
 export function EventManagerPage() {
   const events = useDeckLibraryStore((state) => state.events)
+  const decks = useDeckLibraryStore((state) => state.decks)
   const addEvent = useDeckLibraryStore((state) => state.addEvent)
+  const removeEvent = useDeckLibraryStore((state) => state.removeEvent)
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
+
+  const decksByEvent = events.reduce<Record<string, number>>((map, evt) => {
+    map[evt.id] = decks.filter((deck) => deck.eventId === evt.id).length
+    return map
+  }, {})
 
   return (
     <div className='space-y-6'>
@@ -57,10 +64,23 @@ export function EventManagerPage() {
                 key={evt.id}
                 className='rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-100'
               >
-                <p className='text-base font-semibold text-white'>{evt.name}</p>
-                <p className='text-xs text-slate-400'>
-                  {evt.date ? `Date: ${evt.date}` : 'Date not set'}
-                </p>
+                <div className='flex items-start justify-between gap-3'>
+                  <div>
+                    <p className='text-base font-semibold text-white'>{evt.name}</p>
+                    <p className='text-xs text-slate-400'>
+                      {evt.date ? `Date: ${evt.date}` : 'Date not set'}
+                    </p>
+                    <p className='text-xs text-slate-400'>Decks: {decksByEvent[evt.id] ?? 0}</p>
+                  </div>
+                  {evt.id !== 'homebrew' && evt.id !== 'untagged' && (
+                    <button
+                      className='rounded-full border border-rose-500/60 px-2 py-1 text-xs text-rose-100 transition hover:bg-rose-500/10'
+                      onClick={() => removeEvent(evt.id)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
