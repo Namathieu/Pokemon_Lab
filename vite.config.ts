@@ -19,6 +19,9 @@ export default defineConfig(({ command }) => {
         '@': path.join(__dirname, 'src')
       },
     },
+    build: {
+      emptyOutDir: false,
+    },
     plugins: [
       react(),
       electron({
