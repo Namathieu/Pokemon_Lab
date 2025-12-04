@@ -6,6 +6,13 @@ const OUTPUT_SMALL = path.resolve('public/cards/small')
 const OUTPUT_LARGE = path.resolve('public/cards/large')
 const CONCURRENCY = 10
 
+const sanitizeId = (id) => {
+  const safe = String(id ?? '')
+    .replace(/[^\w.-]/g, '_')
+    .replace(/_+/g, '_')
+  return safe.length ? safe : 'unknown'
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function ensureDir(dir) {
@@ -15,15 +22,18 @@ function ensureDir(dir) {
 }
 
 async function downloadImage(url, dest) {
-  if (!url) return false
+  if (!url) return { downloaded: false, skipped: true }
   if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
-    return false
+    return { downloaded: false, skipped: true }
   }
   const res = await fetch(url)
+  if (res.status === 404) {
+    return { downloaded: false, skipped: true, missing: true }
+  }
   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`)
   const buffer = Buffer.from(await res.arrayBuffer())
   fs.writeFileSync(dest, buffer)
-  return true
+  return { downloaded: true, skipped: false }
 }
 
 async function run() {
@@ -39,17 +49,17 @@ async function run() {
 
   let downloaded = 0
   let skipped = 0
+  let missing = 0
   const tasks = cards.map((card) => async () => {
-    const smallOut = path.join(OUTPUT_SMALL, `${card.id}.jpg`)
-    const largeOut = path.join(OUTPUT_LARGE, `${card.id}.jpg`)
+    const safeId = sanitizeId(card.id)
+    const smallOut = path.join(OUTPUT_SMALL, `${safeId}.jpg`)
+    const largeOut = path.join(OUTPUT_LARGE, `${safeId}.jpg`)
     try {
-      const didSmall = await downloadImage(card.images?.small, smallOut)
-      const didLarge = await downloadImage(card.images?.large, largeOut)
-      if (didSmall || didLarge) {
-        downloaded += Number(didSmall) + Number(didLarge)
-      } else {
-        skipped += 1
-      }
+      const resSmall = await downloadImage(card.images?.small, smallOut)
+      const resLarge = await downloadImage(card.images?.large, largeOut)
+      downloaded += Number(resSmall.downloaded ?? 0) + Number(resLarge.downloaded ?? 0)
+      skipped += Number(resSmall.skipped ?? 0) + Number(resLarge.skipped ?? 0)
+      missing += Number(resSmall.missing ?? 0) + Number(resLarge.missing ?? 0)
     } catch (err) {
       console.warn(`Error for ${card.id}: ${err.message}`)
       await sleep(200)
@@ -67,7 +77,9 @@ async function run() {
   })
 
   await Promise.all(workers)
-  console.log(`Images downloaded: ${downloaded}, skipped (already present): ${skipped}`)
+  console.log(
+    `Images downloaded: ${downloaded}, skipped (already present or missing URL/404): ${skipped}, missing (404): ${missing}`,
+  )
 }
 
 run().catch((err) => {

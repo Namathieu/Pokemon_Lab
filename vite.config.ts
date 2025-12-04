@@ -3,6 +3,7 @@ import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron/simple'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 import pkg from './package.json'
 
 // https://vitejs.dev/config/
@@ -21,9 +22,17 @@ export default defineConfig(({ command }) => {
     },
     build: {
       emptyOutDir: false,
+      copyPublicDir: false,
     },
     plugins: [
       react(),
+      viteStaticCopy({
+        targets: [
+          { src: 'public/data/**/*', dest: 'data' },
+          { src: 'public/favicon.ico', dest: '' },
+          { src: 'public/node.svg', dest: '' },
+        ],
+      }),
       electron({
         main: {
           // Shortcut of `build.lib.entry`
