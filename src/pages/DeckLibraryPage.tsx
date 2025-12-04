@@ -182,6 +182,95 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
     setFeedback({ variant: 'success', message: 'Exported training JSONL.' })
   }
 
+  const exportAiStats = () => {
+    const exportable = sortedDecks.filter((deck) => deck.eventId !== 'homebrew')
+    if (exportable.length === 0) {
+      setFeedback({ variant: 'error', message: 'No stored decks to export for AI data.' })
+      return
+    }
+
+    const cardUsage: Record<
+      string,
+      { id: string; name: string; set: string; number: string; deck_count: number; total_copies: number }
+    > = {}
+    const pairUsage: Record<string, number> = {}
+
+    exportable.forEach((deck) => {
+      const seenInDeck = new Set<string>()
+      // card usage
+      deck.entries.forEach((entry, idx) => {
+        const id = entry.card.id
+        if (!cardUsage[id]) {
+          cardUsage[id] = {
+            id,
+            name: entry.card.name ?? '',
+            set: entry.card.set?.id ?? '',
+            number: entry.card.number ?? '',
+            deck_count: 0,
+            total_copies: 0,
+          }
+        }
+        cardUsage[id].total_copies += entry.count
+        if (!seenInDeck.has(id)) {
+          cardUsage[id].deck_count += 1
+          seenInDeck.add(id)
+        }
+      })
+      // pair usage (deck-level co-occurrence)
+      const ids = Array.from(new Set(deck.entries.map((e) => e.card.id))).sort()
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const key = `${ids[i]}__${ids[j]}`
+          pairUsage[key] = (pairUsage[key] ?? 0) + 1
+        }
+      }
+    })
+
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      deck_count: exportable.length,
+      card_usage: cardUsage,
+      pair_usage: pairUsage,
+      decks: exportable.map((deck) => ({
+        id: deck.id,
+        name: deck.deckName,
+        event: deck.tournamentTag,
+        eventId: deck.eventId,
+        eventDate: deck.eventDate,
+        player: deck.player,
+        ranking: deck.ranking,
+        entries: deck.entries.map((entry) => ({
+          count: entry.count,
+          card: {
+            id: entry.card.id,
+            name: entry.card.name,
+            supertype: entry.card.supertype,
+            subtypes: entry.card.subtypes,
+            types: entry.card.types,
+            set: {
+              id: entry.card.set?.id,
+              name: entry.card.set?.name,
+              ptcgoCode: entry.card.set?.ptcgoCode,
+            },
+            number: entry.card.number,
+            regulationMark: entry.card.regulationMark,
+          },
+        })),
+      })),
+    }
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `deck-ai-data-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setFeedback({ variant: 'success', message: 'Exported AI data JSON.' })
+  }
+
   const handleImport = async () => {
     setIsSaving(true)
     setFeedback(null)
@@ -488,6 +577,12 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
               onClick={exportTrainingData}
             >
               Export training JSONL
+            </button>
+            <button
+              className='rounded-full border border-slate-700/70 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-emerald-400 hover:text-emerald-100'
+              onClick={exportAiStats}
+            >
+              Export AI data (JSON)
             </button>
           </div>
         </div>
