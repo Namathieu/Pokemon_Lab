@@ -33,10 +33,28 @@ function parseLine(line: string): ParsedLine | null {
   }
 
   const tokens = sanitized.split(/\s+/)
-  if (tokens.length < 4) return null
-
   const maybeCount = Number(tokens[0])
   if (!Number.isFinite(maybeCount) || maybeCount <= 0) return null
+
+  // Allow minimal lines like "8 Psychic Energy" without set/number
+  if (tokens.length === 2) {
+    return {
+      count: maybeCount,
+      name: tokens[1],
+      setCode: '',
+      cardNumber: '',
+    }
+  }
+  if (tokens.length === 3) {
+    return {
+      count: maybeCount,
+      name: tokens.slice(1).join(' '),
+      setCode: '',
+      cardNumber: '',
+    }
+  }
+
+  if (tokens.length < 4) return null
 
   const cardNumber = tokens[tokens.length - 1]
   const setCode = tokens[tokens.length - 2]
@@ -72,12 +90,16 @@ function matchSet(card: PokemonCard, setCode: string) {
   return idMatches || ptcgoMatches
 }
 
-function findCard(cards: PokemonCard[], setCode: string, cardNumber: string) {
+function findCard(cards: PokemonCard[], setCode: string, cardNumber: string, name?: string) {
   const normalizedNumber = cardNumber.trim().toLowerCase()
-  return cards.find(
-    (card) =>
-      matchSet(card, setCode) && card.number?.trim().toLowerCase() === normalizedNumber,
-  )
+  const targetName = name ? normalizeName(name) : ''
+  return cards.find((card) => {
+    const numberMatches = card.number?.trim().toLowerCase() === normalizedNumber
+    const setMatches = matchSet(card, setCode)
+    if (!numberMatches || !setMatches) return false
+    if (!targetName) return true
+    return normalizeName(card.name ?? '') === targetName
+  })
 }
 
 function isBasicEnergy(card: PokemonCard) {
@@ -112,22 +134,7 @@ function normalizeName(value: string) {
 
 function findByName(cards: PokemonCard[], name: string) {
   const target = normalizeName(name)
-  const exact = cards.find((card) => normalizeName(card.name ?? '') === target)
-  if (exact) return exact
-  // loose contains match as a fallback
-  return cards.find((card) => normalizeName(card.name ?? '').includes(target))
-}
-
-function findByBaseName(cards: PokemonCard[], name: string) {
-  const base = normalizeName(name).replace(/\b(ex|vstar|vmax|v-union|v|gx|ex)\b/g, '').trim()
-  if (!base) return undefined
-  return cards.find((card) => {
-    const cardBase = normalizeName(card.name ?? '').replace(
-      /\b(ex|vstar|vmax|v-union|v|gx|ex)\b/g,
-      '',
-    ).trim()
-    return cardBase === base
-  })
+  return cards.find((card) => normalizeName(card.name ?? '') === target)
 }
 
 export async function importDeckFromText(
@@ -141,10 +148,9 @@ export async function importDeckFromText(
   for (const line of lines) {
     try {
       let card =
-        findCard(options.cards, line.setCode, line.cardNumber) ??
+        (line.setCode ? findCard(options.cards, line.setCode, line.cardNumber, line.name) : undefined) ??
         findBasicEnergyFallback(options.cards, line.name) ??
-        findByName(options.cards, line.name) ??
-        findByBaseName(options.cards, line.name)
+        findByName(options.cards, line.name)
 
       if (!card) {
         errors.push(`No match for ${line.count}x ${line.name} (${line.setCode} ${line.cardNumber})`)

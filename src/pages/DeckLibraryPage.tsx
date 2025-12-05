@@ -169,17 +169,18 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
       }
     })
 
-    const jsonl = samples.map((sample) => JSON.stringify(sample)).join('\n')
-    const blob = new Blob([jsonl], { type: 'application/jsonl;charset=utf-8' })
+    const blob = new Blob([JSON.stringify(samples, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `deck-training-${new Date().toISOString().slice(0, 10)}.jsonl`
+    link.download = `deck-training-${new Date().toISOString().slice(0, 10)}.json`
     document.body.appendChild(link)
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
-    setFeedback({ variant: 'success', message: 'Exported training JSONL.' })
+    setFeedback({ variant: 'success', message: 'Exported training JSON.' })
   }
 
   const exportAiStats = () => {
@@ -576,7 +577,7 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
               className='rounded-full border border-slate-700/70 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-emerald-400 hover:text-emerald-100'
               onClick={exportTrainingData}
             >
-              Export training JSONL
+              Export training JSON
             </button>
             {/* AI export removed */}
           </div>
