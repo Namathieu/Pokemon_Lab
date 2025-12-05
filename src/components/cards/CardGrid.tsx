@@ -12,8 +12,8 @@ interface CardGridProps {
   page: number
   pageSize: number
   onPageChange(page: number): void
-  onAdd(card: PokemonCard): void
-  deckCounts: Record<string, number>
+  onAdd?: (card: PokemonCard) => void
+  deckCounts?: Record<string, number>
   emptyState?: {
     title: string
     body: string
@@ -35,7 +35,7 @@ function CardTile({
 }: {
   card: PokemonCard
   countInDeck: number
-  onAdd(card: PokemonCard): void
+  onAdd?(card: PokemonCard): void
   onSelect?(card: PokemonCard): void
   disableClick?: boolean
 }) {
@@ -86,18 +86,20 @@ function CardTile({
         >
           Details
         </button>
-        <button
-          className='absolute bottom-3 right-3 inline-flex items-center justify-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-950 shadow-lg shadow-emerald-500/40 transition hover:bg-emerald-400'
-          onClick={(event) => {
-            event.stopPropagation()
-            onAdd(card)
-          }}
-          onPointerDown={handleButtonPointerDown}
-        >
-          <Plus size={14} />
-          <span className='ml-1'>Add</span>
-        </button>
-        {countInDeck > 0 && (
+        {onAdd ? (
+          <button
+            className='absolute bottom-3 right-3 inline-flex items-center justify-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-950 shadow-lg shadow-emerald-500/40 transition hover:bg-emerald-400'
+            onClick={(event) => {
+              event.stopPropagation()
+              onAdd(card)
+            }}
+            onPointerDown={handleButtonPointerDown}
+          >
+            <Plus size={14} />
+            <span className='ml-1'>Add</span>
+          </button>
+        ) : null}
+        {onAdd && countInDeck > 0 && (
           <div className='absolute left-3 top-3 rounded-full border border-emerald-300/60 bg-emerald-500/30 px-3 py-1 text-xs font-semibold text-emerald-50'>
             In deck: {countInDeck}
           </div>
@@ -214,7 +216,7 @@ export function CardGrid({
               <CardTile
                 key={card.id}
                 card={card}
-                countInDeck={deckCounts[card.id] ?? 0}
+                countInDeck={deckCounts?.[card.id] ?? 0}
                 onAdd={onAdd}
                 onSelect={onSelect}
                 disableClick={draggingCardId === card.id}

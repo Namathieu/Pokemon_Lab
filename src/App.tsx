@@ -11,7 +11,7 @@ import { useLocalCardSearch, LOCAL_PAGE_SIZE } from '@/hooks/useLocalCardSearch'
 import { DeckLibraryPage } from '@/pages/DeckLibraryPage'
 import { EventManagerPage } from '@/pages/EventManagerPage'
 import { DeckViewerPage } from '@/pages/DeckViewerPage'
-import { AIBuilderPage } from '@/pages/AIBuilderPage'
+import { CardSearchPage } from '@/pages/CardSearchPage'
 import { getLocalCardImage, imageErrorHandler } from '@/utils/cardImages'
 
 const DEFAULT_FILTERS: CardSearchFilters = {
@@ -53,7 +53,7 @@ function App() {
   const [activeCard, setActiveCard] = useState<PokemonCard | null>(null)
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
   const [previewCard, setPreviewCard] = useState<PokemonCard | null>(null)
-  const [activeView, setActiveView] = useState<'builder' | 'library' | 'events' | 'viewer' | 'ai'>('builder')
+  const [activeView, setActiveView] = useState<'builder' | 'library' | 'events' | 'viewer' | 'search'>('builder')
 
   const addCard = useDeckStore((state) => state.addCard)
   const deckCards = useDeckStore((state) => state.cards)
@@ -185,13 +185,13 @@ function App() {
                 </button>
                 <button
                   className={`rounded-full px-3 py-1 transition ${
-                    activeView === 'ai'
+                    activeView === 'search'
                       ? 'bg-emerald-500 text-emerald-950 font-semibold'
                       : 'hover:bg-white/10'
                   }`}
-                  onClick={() => setActiveView('ai')}
+                  onClick={() => setActiveView('search')}
                 >
-                  AI Builder
+                  Card Search
                 </button>
                 <button
                   className={`rounded-full px-3 py-1 transition ${
@@ -264,11 +264,11 @@ function App() {
               libraryLoaded={libraryCards.length > 0}
               onGoToEvents={() => setActiveView('events')}
             />
-          ) : activeView === 'ai' ? (
-            <AIBuilderPage
+          ) : activeView === 'search' ? (
+            <CardSearchPage
               cardLibrary={libraryCards}
               libraryLoaded={libraryCards.length > 0}
-              onGoToBuilder={() => setActiveView('builder')}
+              onReloadLibrary={() => reloadLibrary()}
             />
           ) : activeView === 'viewer' ? (
             <DeckViewerPage />

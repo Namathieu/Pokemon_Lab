@@ -578,12 +578,7 @@ export function DeckLibraryPage({ cardLibrary, libraryLoaded, onGoToEvents }: De
             >
               Export training JSONL
             </button>
-            <button
-              className='rounded-full border border-slate-700/70 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-emerald-400 hover:text-emerald-100'
-              onClick={exportAiStats}
-            >
-              Export AI data (JSON)
-            </button>
+            {/* AI export removed */}
           </div>
         </div>
         {sortedDecks.length === 0 ? (

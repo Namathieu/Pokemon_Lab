@@ -20,8 +20,7 @@
     "test": "vitest run",
     "sync:cards": "node scripts/fetch-cards.mjs",
     "sync:images": "node scripts/download-card-images.mjs",
-    "import:limitless-html": "node scripts/import-limitless-html.mjs",
-    "build:ai-stats": "node scripts/build-ai-stats.mjs"
+    "import:limitless-html": "node scripts/import-limitless-html.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
